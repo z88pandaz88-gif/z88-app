@@ -2,3 +2,5 @@ pandas
 numpy
 plotly
 yfinance
+openpyxl
+xlrd
