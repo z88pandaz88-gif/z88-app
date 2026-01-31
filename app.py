@@ -5,98 +5,88 @@ import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime, timedelta
 
-# إعدادات النظام السيادي
-st.set_page_config(page_title="Z88 AI Predator Agent", layout="wide")
+# إعدادات الواجهة
+st.set_page_config(page_title="Z88 AI Agent", layout="wide")
 
-# --- 1. محرك معالجة البيانات (حل مشاكل الـ Logs) ---
-def clean_and_fix_df(df):
-    # مسح المسافات وحل تكرار الأعمدة
+# 1. تنظيف البيانات ومنع تكرار الأعمدة (حل مشكلة الـ Logs)
+def fix_data(df):
     df.columns = [str(c).strip() for c in df.columns]
     df = df.loc[:, ~df.columns.duplicated()]
     return df
 
-# --- 2. وكيل تحليل النماذج (Z88 & Z6 AI Logic) ---
-def ai_agent_scan(ticker):
+# 2. محرك الـ AI Agent (تحليل Z88 و Z6)
+def run_ai_agent(ticker):
     try:
-        # جلب البيانات وحل مشكلة الـ Multi-index فوراً
+        # جلب البيانات وحل مشكلة الـ Multi-index اللي كانت في الـ Logs
         hist = yf.download(f"{ticker}.CA", period="150d", progress=False)
         if isinstance(hist.columns, pd.MultiIndex):
             hist.columns = hist.columns.get_level_values(0)
         
         if hist.empty: return None
 
-        last_close = hist['Close'].iloc[-1]
-        vol_avg = hist['Volume'].rolling(20).mean().iloc[-1]
+        # حسابات الوكيل الذكي
+        last_p = hist['Close'].iloc[-1]
+        vol_avg = hist['Volume'].tail(20).mean()
         curr_vol = hist['Volume'].iloc[-1]
-        high_20 = hist['High'].rolling(20).max().iloc[-1]
-        low_20 = hist['Low'].rolling(20).min().iloc[-1]
+        h_20 = hist['High'].tail(20).max()
+        l_20 = hist['Low'].tail(20).min()
 
-        # منطق نموذج Z88 (انفجار اختراق مع سيولة)
-        if last_close >= high_20 and curr_vol > vol_avg * 1.5:
-            return {"model": "Z88 - انفجار اختراق 🚀", "score": 95, "action": "دخول تأكيدي", "data": hist}
+        # نموذج Z88: اختراق قمة مع سيولة انفجارية
+        if last_p >= h_20 and curr_vol > vol_avg * 1.5:
+            return {"model": "Z88 - انفجار سعري 🚀", "score": 95, "desc": "الوكيل اكتشف اختراقاً قوياً مع دخول سيولة مؤسساتية.", "data": hist}
         
-        # منطق نموذج Z6 (ارتداد قاع مع فوليوم شرائي)
-        elif last_close <= low_20 * 1.05 and curr_vol > vol_avg:
-            return {"model": "Z6 - قناص القاع 🏹", "score": 88, "action": "تجميع مبكر", "data": hist}
+        # نموذج Z6: ارتداد من قاع مع فوليوم شرائي
+        elif last_p <= l_20 * 1.05 and curr_vol > vol_avg:
+            return {"model": "Z6 - قناص القاع 🏹", "score": 88, "desc": "الوكيل يرى منطقة تجميع مثالية وارتداد وشيك من القاع.", "data": hist}
         
-        return {"model": "بحث عن فرصة...", "score": 0, "action": "مراقبة", "data": hist}
-    except:
         return None
+    except: return None
 
-# --- الواجهة الرئيسية ---
-st.title("🤖 وكيل الذكاء الاصطناعي القناص (Z88 & Z6)")
-st.markdown("---")
+# الواجهة الرئيسية
+st.title("🤖 وكيل Z88 للذكاء الاصطناعي")
+st.write("الوكيل يقوم الآن بمسح الصور والبيانات لتحديد نماذج الانفجار.")
 
-file = st.sidebar.file_uploader("ارفع ملف الأسهم اليومي", type=["csv", "xlsx"])
+file = st.sidebar.file_uploader("ارفع ملف الأسعار", type=["csv", "xlsx"])
 
 if file:
-    df_raw = pd.read_excel(file) if file.name.endswith('.xlsx') else pd.read_csv(file, encoding='utf-8-sig')
-    df = clean_and_fix_df(df_raw)
-    
-    st.sidebar.success("تم تفعيل الوكيل الذكي بنجاح ✅")
-    
-    # اختيار وضع المسح
-    mode = st.radio("اختر مهمة الوكيل:", ["تحليل سهم محدد (Detailed Visual)", "مسح السوق (AI Market Scanner)"])
+    df = fix_data(pd.read_excel(file) if file.name.endswith('.xlsx') else pd.read_csv(file))
+    st.sidebar.success("تم تفعيل الوكيل!")
 
-    if mode == "تحليل سهم محدد (Detailed Visual)":
-        ticker = st.selectbox("اختر السهم ليرسل الوكيل تقريره:", df['الرمز'].unique())
+    mode = st.radio("اختر المهمة:", ["مسح السوق بالكامل", "تحليل سهم محدد"])
+
+    if mode == "تحليل سهم محدد":
+        ticker = st.selectbox("اختر السهم:", df['الرمز'].unique())
+        res = run_ai_agent(ticker)
         
-        with st.spinner('الوكيل يقوم بتصوير وتحليل الشارت الآن...'):
-            res = ai_agent_scan(ticker)
+        if res:
+            col1, col2 = st.columns([2, 1])
+            with col2:
+                st.subheader("🧠 تقرير الوكيل")
+                st.success(f"النموذج: {res['model']}")
+                st.metric("قوة الإشارة", f"{res['score']}%")
+                st.write(res['desc'])
+            with col1:
+                fig = go.Figure(data=[go.Candlestick(x=res['data'].index, open=res['data']['Open'], high=res['data']['High'], low=res['data']['Low'], close=res['data']['Close'])])
+                fig.update_layout(template="plotly_dark", height=400)
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("السهم لا يحقق شروط Z88 أو Z6 حالياً.")
             
-            if res and res['data'] is not None:
-                c1, c2 = st.columns([2, 1])
-                with c2:
-                    st.subheader("🧠 رؤية الوكيل")
-                    st.success(f"**النموذج:** {res['model']}")
-                    st.info(f"**الإجراء المقترح:** {res['action']}")
-                    st.metric("قوة الإشارة", f"{res['score']}%")
-                
-                with c1:
-                    # رسم الشارت الذي يراه الـ AI
-                    fig = go.Figure(data=[go.Candlestick(x=res['data'].index, open=res['data']['Open'], 
-                                                         high=res['data']['High'], low=res['data']['Low'], 
-                                                         close=res['data']['Close'])])
-                    fig.update_layout(template="plotly_dark", height=450, title=f"تحليل الوكيل لـ {ticker}")
-                    st.plotly_chart(fig, use_container_width=True)
-
-                
-
-    else: # وضع مسح السوق بالكامل
-        if st.button("بدء عملية مسح الـ AI لكل الأسهم"):
-            st.subheader("🔦 الأسهم التي لفتت انتباه الوكيل (موديل Z)")
+    else:
+        if st.button("ابدأ مسح الـ AI للسوق"):
             findings = []
-            tickers = df['الرمز'].unique()
+            for t in df['الرمز'].unique()[:30]: # مسح عينة من السوق
+                r = run_ai_agent(t)
+                if r: findings.append({"الرمز": t, "النموذج": r['model'], "القوة": f"{r['score']}%"})
             
-            for t in tickers:
-                result = ai_agent_scan(t)
-                if result and result['score'] > 80:
-                    findings.append({"الرمز": t, "النموذج المكتشف": result['model'], "القوة": f"{result['score']}%", "التوصية": result['action']})
-            
-            if findings:
-                st.table(pd.DataFrame(findings))
-            else:
-                st.warning("الوكيل لم يجد فرصاً محققة لشروط Z88 أو Z6 في هذه اللحظة.")
+            if findings: st.table(pd.DataFrame(findings))
+            else: st.info("لم يتم العثور على فرص مطابقة للنماذج حالياً.")
 
-else:
-    st.info("قم برفع ملفك وسأقوم بتشغيل الـ AI Agent فوراً.")
+
+
+### يعني إيه الكلام ده ببساطة؟
+* **Z88:** ده "الوحش" بتاعنا، بيدور على سهم بيخترق قمة والناس بتهجم عليه بسيولة (فوليوم) كبيرة.
+* **Z6:** ده "القناص"، بيدور على سهم نزل كتير وبدأ يلم (تجميع) عند قاع الـ 20 يوم اللي فاتوا.
+* **الوكيل (Agent):** هو اللي بيقوم بالليل والنهار يفتح "صور" الشارتات دي ويطلعلك الخلاصة عشان متتعبش نفسك في البحث اليدوي.
+
+**إنجز وارفع الكود ده، وقولي لو محتاج الوكيل يركز على سهم معين أو يبعتلك تنبيهات بطريقة تانية؟**
