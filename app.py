@@ -5,103 +5,98 @@ import plotly.graph_objects as go
 import numpy as np
 from datetime import datetime, timedelta
 
-# إعدادات الصفحة والستايل
-st.set_page_config(page_title="Z88 Predator AI Agent", layout="wide")
+# إعدادات النظام السيادي
+st.set_page_config(page_title="Z88 AI Predator Agent", layout="wide")
 
-# --- 1. محرك تنظيف البيانات (منع تكرار الأعمدة المذكور في الـ Logs) ---
-def clean_data(df):
+# --- 1. محرك معالجة البيانات (حل مشاكل الـ Logs) ---
+def clean_and_fix_df(df):
+    # مسح المسافات وحل تكرار الأعمدة
     df.columns = [str(c).strip() for c in df.columns]
     df = df.loc[:, ~df.columns.duplicated()]
     return df
 
-# --- 2. وكيل تحليل الأنماط (AI Visual Logic) ---
-def analyze_z_models(df_hist):
-    # تحويل الشارت لبيانات رقمية يفهمها الـ AI كأنها صورة
-    recent = df_hist.tail(20)
-    current_p = recent['Close'].iloc[-1]
-    low_20 = recent['Low'].min()
-    high_20 = recent['High'].max()
-    
-    # حساب السيولة اللحظية (Money Flow)
-    vol_mean = recent['Volume'].mean()
-    curr_vol = recent['Volume'].iloc[-1]
-    
-    analysis = {"model": "بحث...", "status": "محايد", "score": 0}
+# --- 2. وكيل تحليل النماذج (Z88 & Z6 AI Logic) ---
+def ai_agent_scan(ticker):
+    try:
+        # جلب البيانات وحل مشكلة الـ Multi-index فوراً
+        hist = yf.download(f"{ticker}.CA", period="150d", progress=False)
+        if isinstance(hist.columns, pd.MultiIndex):
+            hist.columns = hist.columns.get_level_values(0)
+        
+        if hist.empty: return None
 
-    # فحص نموذج Z88 (انفجار موجة 3 مع سيولة)
-    if current_p > high_20 * 0.98 and curr_vol > vol_mean * 1.5:
-        analysis = {
-            "model": "Z88 - انفجار سيولة 🚀",
-            "status": "دخول قوي",
-            "score": 95,
-            "desc": "الـ AI اكتشف تجميع مؤسساتي واختراق لمستوى المقاومة الأخير."
-        }
-    # فحص نموذج Z6 (ارتداد سريع من قاع)
-    elif current_p < low_20 * 1.05 and curr_vol > vol_mean:
-        analysis = {
-            "model": "Z6 - ارتداد قاع 🏹",
-            "status": "تجميع قنص",
-            "score": 85,
-            "desc": "الـ AI يرى ضغط بيعي انتهى وبداية تكوين قاع فرعي للانطلاق."
-        }
-    
-    return analysis
+        last_close = hist['Close'].iloc[-1]
+        vol_avg = hist['Volume'].rolling(20).mean().iloc[-1]
+        curr_vol = hist['Volume'].iloc[-1]
+        high_20 = hist['High'].rolling(20).max().iloc[-1]
+        low_20 = hist['Low'].rolling(20).min().iloc[-1]
+
+        # منطق نموذج Z88 (انفجار اختراق مع سيولة)
+        if last_close >= high_20 and curr_vol > vol_avg * 1.5:
+            return {"model": "Z88 - انفجار اختراق 🚀", "score": 95, "action": "دخول تأكيدي", "data": hist}
+        
+        # منطق نموذج Z6 (ارتداد قاع مع فوليوم شرائي)
+        elif last_close <= low_20 * 1.05 and curr_vol > vol_avg:
+            return {"model": "Z6 - قناص القاع 🏹", "score": 88, "action": "تجميع مبكر", "data": hist}
+        
+        return {"model": "بحث عن فرصة...", "score": 0, "action": "مراقبة", "data": hist}
+    except:
+        return None
 
 # --- الواجهة الرئيسية ---
-st.title("🤖 وكيل الذكاء الاصطناعي Z88 & Z6")
-st.sidebar.markdown("### إعدادات الوكيل")
+st.title("🤖 وكيل الذكاء الاصطناعي القناص (Z88 & Z6)")
+st.markdown("---")
 
 file = st.sidebar.file_uploader("ارفع ملف الأسهم اليومي", type=["csv", "xlsx"])
 
 if file:
     df_raw = pd.read_excel(file) if file.name.endswith('.xlsx') else pd.read_csv(file, encoding='utf-8-sig')
-    df = clean_data(df_raw)
+    df = clean_and_fix_df(df_raw)
     
-    st.sidebar.success("تم رفع الملف وتفعيل الوكيل ✅")
+    st.sidebar.success("تم تفعيل الوكيل الذكي بنجاح ✅")
     
     # اختيار وضع المسح
-    scan_mode = st.radio("وضع المسح:", ["تحليل سهم محدد", "مسح السوق بالكامل (AI Scan)"])
+    mode = st.radio("اختر مهمة الوكيل:", ["تحليل سهم محدد (Detailed Visual)", "مسح السوق (AI Market Scanner)"])
 
-    if scan_mode == "تحليل سهم محدد":
-        ticker = st.selectbox("اختر السهم:", df['الرمز'].unique())
-        p_now = df[df['الرمز'] == ticker].iloc[0]['إغلاق']
+    if mode == "تحليل سهم محدد (Detailed Visual)":
+        ticker = st.selectbox("اختر السهم ليرسل الوكيل تقريره:", df['الرمز'].unique())
         
-        with st.spinner('جاري جلب الشارت وتحليله بصرياً...'):
-            hist = yf.download(f"{ticker}.CA", period="1y", progress=False)
-            if isinstance(hist.columns, pd.MultiIndex): hist.columns = hist.columns.get_level_values(0)
+        with st.spinner('الوكيل يقوم بتصوير وتحليل الشارت الآن...'):
+            res = ai_agent_scan(ticker)
             
-            if not hist.empty:
-                result = analyze_z_models(hist)
+            if res and res['data'] is not None:
+                c1, c2 = st.columns([2, 1])
+                with c2:
+                    st.subheader("🧠 رؤية الوكيل")
+                    st.success(f"**النموذج:** {res['model']}")
+                    st.info(f"**الإجراء المقترح:** {res['action']}")
+                    st.metric("قوة الإشارة", f"{res['score']}%")
                 
-                col1, col2 = st.columns([2, 1])
-                with col2:
-                    st.markdown(f"### نتائج وكيل الـ AI")
-                    st.success(f"**النموذج المكتشف:** {result['model']}")
-                    st.info(f"**الحالة:** {result['status']}")
-                    st.metric("درجة الثقة", f"{result['score']}%")
-                    st.write(f"💡 {result['desc']}")
-                
-                with col1:
-                    fig = go.Figure(data=[go.Candlestick(x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close'])])
-                    fig.update_layout(template="plotly_dark", height=450, title=f"الشارت الذي يحلله الوكيل لـ {ticker}")
+                with c1:
+                    # رسم الشارت الذي يراه الـ AI
+                    fig = go.Figure(data=[go.Candlestick(x=res['data'].index, open=res['data']['Open'], 
+                                                         high=res['data']['High'], low=res['data']['Low'], 
+                                                         close=res['data']['Close'])])
+                    fig.update_layout(template="plotly_dark", height=450, title=f"تحليل الوكيل لـ {ticker}")
                     st.plotly_chart(fig, use_container_width=True)
 
-    else: # مسح السوق بالكامل
-        if st.button("ابدأ مسح الـ AI لكل الأسهم"):
+                
+
+    else: # وضع مسح السوق بالكامل
+        if st.button("بدء عملية مسح الـ AI لكل الأسهم"):
+            st.subheader("🔦 الأسهم التي لفتت انتباه الوكيل (موديل Z)")
             findings = []
-            progress_bar = st.progress(0)
-            tickers = df['الرمز'].unique()[:20] # تجربة على أول 20 سهم للسرعة
+            tickers = df['الرمز'].unique()
             
-            for i, t in enumerate(tickers):
-                h = yf.download(f"{t}.CA", period="60d", progress=False)
-                if not h.empty:
-                    if isinstance(h.columns, pd.MultiIndex): h.columns = h.columns.get_level_values(0)
-                    res = analyze_z_models(h)
-                    if res['score'] > 0:
-                        findings.append({"الرمز": t, "النموذج": res['model'], "القوة": res['score']})
-                progress_bar.progress((i + 1) / len(tickers))
+            for t in tickers:
+                result = ai_agent_scan(t)
+                if result and result['score'] > 80:
+                    findings.append({"الرمز": t, "النموذج المكتشف": result['model'], "القوة": f"{result['score']}%", "التوصية": result['action']})
             
-            st.table(pd.DataFrame(findings))
+            if findings:
+                st.table(pd.DataFrame(findings))
+            else:
+                st.warning("الوكيل لم يجد فرصاً محققة لشروط Z88 أو Z6 في هذه اللحظة.")
 
 else:
-    st.info("قم برفع الملف ليقوم الـ AI Agent ببدء المهمة.")
+    st.info("قم برفع ملفك وسأقوم بتشغيل الـ AI Agent فوراً.")
