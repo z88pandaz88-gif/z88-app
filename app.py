@@ -5,18 +5,16 @@ import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# 1. إعدادات النظام
-st.set_page_config(page_title="Z88 Predator Hub PRO", layout="wide")
+# 1. إعدادات النظام الاحترافية
+st.set_page_config(page_title="Z88 Predator Master", layout="wide")
 
-# --- محرك معالجة البيانات واللغة العربية (Anti-Crash) ---
-def load_data(file):
+# دالة معالجة النصوص والملفات (عربي 100%)
+def load_and_clean(file):
     try:
-        if file.name.endswith('.xlsx'):
-            df = pd.read_excel(file)
-        else:
-            df = pd.read_csv(file, encoding='utf-8-sig')
+        df = pd.read_excel(file) if file.name.endswith('.xlsx') else pd.read_csv(file, encoding='utf-8-sig')
         df.columns = [str(c).strip() for c in df.columns]
-        df = df.loc[:, ~df.columns.duplicated()] # منع التكرار القاتل
+        # منع تكرار الأعمدة (حل مشكلة الـ Logs)
+        df = df.loc[:, ~df.columns.duplicated()]
         mapping = {'الرمز': 'الرمز', 'إغلاق': 'إغلاق', 'السيولة': 'السيولة', 'اسم الشركه': 'اسم الشركه', 'الارتكاز': 'الارتكاز'}
         for col in df.columns:
             for k, v in mapping.items():
@@ -24,119 +22,119 @@ def load_data(file):
         return df
     except: return None
 
-# --- محرك إليوت والزمن التفصيلي ---
-def pro_elliott_engine(ticker, price):
+# دالة محرك البحث والتحليل (إليوت + مؤشرات + جان)
+def get_full_analysis(ticker, current_p):
     try:
+        # جلب البيانات التاريخية ومعالجة مشكلة الـ Multi-index
         hist = yf.download(f"{ticker}.CA", period="2y", progress=False)
         if isinstance(hist.columns, pd.MultiIndex): hist.columns = hist.columns.get_level_values(0)
-        
+        if hist.empty: return None
+
+        # --- 1. تحليل إليوت والزمن ---
         low_p = hist['Low'].min()
         low_d = hist['Low'].idxmin()
         high_p = hist['High'].max()
-        
-        # حساب الموجة 3 و 5
-        wave_1_size = high_p - low_p
-        target_3 = low_p + (wave_1_size * 1.618)
-        target_5 = low_p + (wave_1_size * 2.618)
-        
-        # التوقع الزمني (فيبوناتشي 144 يوم)
-        t_date = low_d + timedelta(days=144)
-        
-        return {"start_p": low_p, "start_d": low_d.date(), "t3": target_3, "t5": target_5, "t_date": t_date.date(), "hist": hist}
+        wave_size = high_p - low_p
+        t3 = low_p + (wave_size * 1.618)
+        t5 = low_p + (wave_size * 2.618)
+        target_date = low_d + timedelta(days=144) # دورة زمنية فيبوناتشي
+
+        # --- 2. المؤشرات الرقمية ---
+        delta = hist['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        rsi = 100 - (100 / (1 + (gain/loss)))
+        ema12 = hist['Close'].ewm(span=12, adjust=False).mean()
+        ema26 = hist['Close'].ewm(span=26, adjust=False).mean()
+        macd = ema12 - ema26
+        sig = macd.ewm(span=9, adjust=False).mean()
+
+        return {
+            "hist": hist, "low_p": low_p, "low_d": low_d.date(),
+            "t3": t3, "t5": t5, "t_date": target_date.date(),
+            "rsi": rsi.iloc[-1], "macd": macd.iloc[-1], "sig": sig.iloc[-1]
+        }
     except: return None
 
-# --- محرك المؤشرات الرقمية ---
-def add_indicators(df_hist):
-    df = df_hist.copy()
-    # RSI
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    df['RSI'] = 100 - (100 / (1 + (gain/loss)))
-    # MACD
-    ema12 = df['Close'].ewm(span=12, adjust=False).mean()
-    ema26 = df['Close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = ema12 - ema26
-    df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-    # Bollinger
-    df['MA20'] = df['Close'].rolling(20).mean()
-    df['UP'] = df['MA20'] + (df['Close'].rolling(20).std() * 2)
-    df['LOW'] = df['MA20'] - (df['Close'].rolling(20).std() * 2)
-    return df
-
 # --- الواجهة الرئيسية ---
-st.title("🏹 نظام القناص Z88 - النسخة السيادية الكاملة")
+st.title("🏹 مركز قيادة Z88 PREDATOR - العرض المتدفق")
 
-uploaded_file = st.sidebar.file_uploader("ارفع ملف البيانات اليومي", type=["csv", "xlsx"])
+uploaded_file = st.sidebar.file_uploader("ارفع ملف الأسعار", type=["csv", "xlsx"])
 
 if uploaded_file:
-    df_main = load_data(uploaded_file)
+    df_main = load_and_clean(uploaded_file)
     if df_main is not None:
-        st.sidebar.success("✅ تم تفعيل 13 حزمة تحليلية")
+        st.sidebar.success("✅ البيانات جاهزة")
         
-        tabs = st.tabs([
-            "🎯 القناص (إليوت)", "🚀 السكويز & الزمن", "📐 زوايا جان", "🧱 الأوردر بلوك", 
-            "📈 المؤشرات الرقمية", "🐳 نبض الميكر", "🚨 إشارات التداول", "💼 المحفظة الذكية", 
-            "📊 تحليل السوق", "🔍 البحث التاريخي", "🧠 سيكولوجية", "🛡️ صمام الأمان", "📥 التقارير"
-        ])
+        # اختيار السهم (المحرك الرئيسي للوحة)
+        st.subheader("🔍 اختر السهم لبدء التشغيل الشامل")
+        sel_ticker = st.selectbox("", df_main['الرمز'].unique())
+        
+        row = df_main[df_main['الرمز'] == sel_ticker].iloc[0]
+        p_now = row['إغلاق']
+        
+        st.markdown(f"## 🏛️ تحليل سهم: {row['اسم الشركه']} ({sel_ticker})")
+        
+        # سحب التحليل
+        with st.spinner('جاري تشغيل الـ 13 محرك تحليل...'):
+            data = get_full_analysis(sel_ticker, p_now)
 
-        # 1. القناص (إليوت التفصيلي)
-        with tabs[0]:
-            sel = st.selectbox("اختر السهم:", df_main['الرمز'].unique())
-            p_now = df_main[df_main['الرمز'] == sel]['إغلاق'].values[0]
-            data = pro_elliott_engine(sel, p_now)
-            if data:
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.info(f"📍 بدأت الموجة العظمى يوم: {data['start_d']} بسعر: {data['start_p']:.2f}")
-                    st.success(f"🎯 مستهدف موجة 3: {data['t3']:.2f}")
-                with c2:
-                    st.warning(f"📅 التاريخ المتوقع للهدف: {data['t_date']}")
-                    st.error(f"🏁 مستهدف موجة 5 (نهائي): {data['t5']:.2f}")
-                
-                fig = go.Figure(data=[go.Candlestick(x=data['hist'].index, open=data['hist']['Open'], high=data['hist']['High'], low=data['hist']['Low'], close=data['hist']['Close'])])
-                fig.add_hline(y=data['t3'], line_dash="dash", line_color="green")
-                st.plotly_chart(fig, use_container_width=True)
+        if data:
+            # --- الترتيب العمودي حسب رؤيتي الفنية ---
+            
+            # 1. قسم القناص (إليوت والزمن)
+            st.divider()
+            st.subheader("🎯 1. محرك القناص (إليوت والزمن التفصيلي)")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("سعر بداية الموجة", f"{data['low_p']:.2f}", f"بدأت في {data['low_d']}")
+            c2.metric("المستهدف (موجة 3)", f"{data['t3']:.2f}", "🎯 هدف رئيسي")
+            c3.metric("تاريخ الهدف المتوقع", f"{data['t_date']}")
+            
+            
 
-        # 2. السكويز والزمن
-        with tabs[1]:
-            st.subheader("🔥 رادار السكويز والانعكاس الزمني")
-            df_main['Squeeze'] = np.where(df_main['السيولة'] > 60, "انفجار وشيك 🚀", "تجميع")
-            df_main['Ref_Date'] = (datetime.now() + timedelta(days=13)).date()
-            st.dataframe(df_main[['الرمز', 'إغلاق', 'السيولة', 'Squeeze', 'Ref_Date']])
-
-        # 3. زوايا جان
-        with tabs[2]:
-            st.subheader("📐 زوايا جان السعرية والزمنية")
+            # 2. قسم زوايا جان والأوردر بلوك
+            st.divider()
+            st.subheader("🧱 2. السيولة المؤسساتية (Order Block) وزوايا جان")
+            g1, g2, g3 = st.columns(3)
             root = np.sqrt(p_now)
-            st.write(f"زاوية 90: {(root + 0.5)**2:.2f} | زاوية 180: {(root + 1)**2:.2f} | زاوية 360: {(root + 2)**2:.2f}")
+            g1.success(f"دعم الحيتان (OB Buy): {data['hist']['Low'].tail(20).min():.2f}")
+            g2.error(f"مقاومة الميكر (OB Sell): {data['hist']['High'].tail(20).max():.2f}")
+            g3.info(f"زاوية جان 180 (انعكاس): {(root + 1)**2:.2f}")
 
-        # 4. الأوردر بلوك
-        with tabs[3]:
-            if data:
-                st.success(f"📦 منطقة شراء الميكر (Buy OB): {data['hist']['Low'].tail(20).min()}")
-                st.error(f"🚫 منطقة بيع الميكر (Sell OB): {data['hist']['High'].tail(20).max()}")
+            # 3. قسم المؤشرات والسكويز (Technical Health)
+            st.divider()
+            st.subheader("📈 3. نبض المؤشرات (MACD / RSI / Squeeze)")
+            m1, m2, m3 = st.columns(3)
+            m1.write(f"**RSI (14):** {data['rsi']:.2f}")
+            m2.write(f"**حالة الماكد:** {'إيجابي ✅' if data['macd'] > data['sig'] else 'سلبي ❌'}")
+            m3.write(f"**السكويز:** {'انفجار وشيك 🚀' if row['السيولة'] > 60 else 'تجميع 😴'}")
 
-        # 5. المؤشرات الرقمية
-        with tabs[4]:
-            if data:
-                df_i = add_indicators(data['hist'])
-                st.line_chart(df_i[['MACD', 'Signal', 'RSI']])
+            # 4. الشارت الفني المتكامل
+            st.divider()
+            st.subheader("📊 4. الشارت الفني التفاعلي")
+            fig = go.Figure(data=[go.Candlestick(x=data['hist'].index, open=data['hist']['Open'], 
+                                                 high=data['hist']['High'], low=data['hist']['Low'], 
+                                                 close=data['hist']['Close'], name='السعر')])
+            fig.add_hline(y=data['t3'], line_dash="dash", line_color="green", annotation_text="هدف إليوت")
+            fig.update_layout(template="plotly_dark", height=600)
+            st.plotly_chart(fig, use_container_width=True)
 
-        # 6. نبض الميكر
-        with tabs[5]:
-            df_main['Maker_Pulse'] = (df_main['السيولة'] * df_main['إغلاق']) / 100
-            st.dataframe(df_main[['الرمز', 'السيولة', 'Maker_Pulse']].sort_values(by='Maker_Pulse', ascending=False))
+            # 5. السيكولوجية وصمام الأمان
+            st.divider()
+            st.subheader("🧠 5. السيكولوجية وصمام الأمان")
+            st.warning(f"⚠️ وقف الخسارة النهائي (إغلاق تحت): {p_now * 0.94:.2f}")
+            st.info(f"💡 نصيحة الميكر: السهم في منطقة {'تجميع هادئ' if row['السيولة'] < 50 else 'دخول سيولة ذكية'}")
 
-        # 10. البحث التاريخي
-        with tabs[9]:
-            st.subheader("🔍 ابحث عن أي سهم Z1, Z6, Z7, Z88")
-            # المحرك يعمل تلقائياً مع الاختيار من القائمة
+            # 6. تحميل الداتا
+            st.divider()
+            csv_out = data['hist'].to_csv(index=True, encoding='utf-8-sig').encode('utf-8-sig')
+            st.download_button(f"📥 تحميل تقرير {sel_ticker} الكامل", csv_out, f"{sel_ticker}_Z88_Full.csv")
 
-        # 13. التقارير
-        with tabs[12]:
-            csv = df_main.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("📥 تحميل التقرير النهائي (عربي كامل)", csv, "Z88_Master_Report.csv")
+        # عرض جدول السوق بالكامل في النهاية
+        st.divider()
+        st.subheader("📋 ملخص حالة السوق بالكامل")
+        st.dataframe(df_main[['الرمز', 'اسم الشركه', 'إغلاق', 'السيولة']])
+        st.download_button("📥 تحميل داتا السوق كاملة", df_main.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig'), "Market_Report.csv")
 
 else:
-    st.info("👋 ارفع ملف الأسعار لفتح 13 قسماً كاملاً بدون اختصار.")
+    st.info("👋 ارفع ملف الأسعار (Prices, support & Resistance) لتفعيل الرادار.")
