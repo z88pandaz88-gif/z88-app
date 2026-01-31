@@ -1,92 +1,84 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import yfinance as yf
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# 1. إعدادات الصفحة
-st.set_page_config(page_title="Z88 Global Hub", layout="wide")
+st.set_page_config(page_title="Z88 Global Engine", layout="wide")
 
-# 2. وظيفة معالجة الملف (لتفادي أخطاء الأسماء والمسافات)
-def process_data(df):
-    # مسح المسافات من أسماء الأعمدة فوراً
+# دالة لتنظيف ملفك الخاص
+def load_and_clean_data(file):
+    df = pd.read_csv(file)
+    # تنظيف أي مسافات مخفية في أسماء الأعمدة
     df.columns = [c.strip() for c in df.columns]
-    # تنظيف الرموز
+    # تنظيف الأكواد
     df['الرمز'] = df['الرمز'].astype(str).str.strip()
     return df
 
-# 3. محرك زوايا جان (Square of 9)
-def get_gann_levels(price):
-    root = np.sqrt(price)
-    return {
-        "زاوية 90 (دعم/مقاومة)": (root + 0.5)**2,
-        "زاوية 180 (انعكاس)": (root + 1.0)**2,
-        "زاوية 270 (هدف)": (root + 1.5)**2,
-        "زاوية 360 (دورة سعري)": (root + 2.0)**2
-    }
+# دالة جلب الداتا القديمة (الـ History)
+def get_historical_data(ticker):
+    try:
+        # إضافة .CA للأكواد المصرية
+        full_ticker = f"{ticker}.CA"
+        data = yf.download(full_ticker, period="2y", interval="1d", progress=False)
+        return data
+    except:
+        return None
 
-# --- الواجهة البرمجية ---
-st.title("🛡️ مركز قيادة Z88 QUANT PANDA")
-st.markdown("### النظام المتكامل لتحليل السوق المصري")
+st.title("🛡️ محرك Z88 الذكي (تحليل شامل)")
 
-# القائمة الجانبية لرفع الملف بنفس الفورمات
+# رفع ملفك المرفق
 uploaded_file = st.sidebar.file_uploader("ارفع ملف Prices, support & Resistance", type="csv")
 
 if uploaded_file:
-    # قراءة الملف ومعالجته
-    raw_df = pd.read_csv(uploaded_file)
-    df = process_data(raw_df)
-    st.sidebar.success("✅ تم التعرف على ملفك بنجاح")
+    df = load_and_clean_data(uploaded_file)
+    st.sidebar.success("✅ تم قبول ملفك وتنظيف البيانات")
 
-    # إعداد الأقسام التسعة
-    tabs = st.tabs([
-        "🔍 البحث", "🌊 إليوت", "📐 زوايا جان", "🧱 أوردر بلوك", 
-        "⏳ زمن وسكويز", "📊 تحليل السوق", "🧠 سيكولوجية", "💼 المحفظة", "🐳 حيتان"
-    ])
+    # الأقسام المطلوبة
+    tab_list = ["البحث & الداتا القديمة", "إليوت & زوايا جان", "الزمن & السيولة", "المحفظة & الحيتان"]
+    tabs = st.tabs(tab_list)
 
-    # --- القسم 1: البحث والتحليل اللحظي ---
+    # القسم الأول: البحث وجلب الداتا القديمة من الإنترنت
     with tabs[0]:
-        search_ticker = st.text_input("ادخل كود السهم (مثل COMI أو TMGH):").strip().upper()
+        search_ticker = st.text_input("ادخل كود السهم (مثلاً COMI):").upper()
         if search_ticker:
-            stock_row = df[df['الرمز'] == search_ticker]
-            if not stock_row.empty:
-                row = stock_row.iloc[0]
-                c1, c2, c3 = st.columns(3)
-                c1.metric("آخر سعر", row['إغلاق'])
-                c2.metric("السيولة الداخلة", f"{row['نسبة السيولة الداخلة الى السهم']}%")
-                c3.metric("مستهدف إليوت Z88", round(row['إغلاق'] * 1.618, 2))
-                st.write("**تفاصيل الدعم والمقاومة من ملفك:**")
-                st.table(stock_row[['مقاومة 1', 'الارتكاز', 'دعم 1']])
-            else:
-                st.error("السهم غير موجود في الملف، تأكد من الكود.")
+            # 1. الداتا اللحظية من ملفك
+            current_data = df[df['الرمز'] == search_ticker]
+            
+            if not current_data.empty:
+                st.subheader(f"📊 تحليل السهم: {current_data.iloc[0]['اسم الشركه']}")
+                
+                # 2. جلب الداتا القديمة فوراً
+                hist_data = get_historical_data(search_ticker)
+                
+                if hist_data is not None:
+                    # رسم شارت يدمج بين الماضي (ياهو) والحاضر (ملفك)
+                    fig = go.Figure(data=[go.Candlestick(x=hist_data.index,
+                                    open=hist_data['Open'], high=hist_data['High'],
+                                    low=hist_data['Low'], close=hist_data['Close'])])
+                    fig.update_layout(title="التاريخ السعري (سنتين) + جلسة اليوم", template="plotly_dark")
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                else:
+                    st.warning("⚠️ تعذر جلب الداتا القديمة من ياهو، جاري استخدام بيانات ملفك فقط.")
 
-    # --- القسم 2: موجات إليوت ---
+    # القسم الثاني: زوايا جان وإليوت (تستخدم الداتا المدمجة)
     with tabs[1]:
-        st.subheader("تحليل الموجات بناءً على فيبوناتشي")
-        df['Target_161'] = df['إغلاق'] * 1.618
-        df['Target_261'] = df['إغلاق'] * 2.618
-        st.dataframe(df[['الرمز', 'اسم الشركه', 'إغلاق', 'Target_161', 'Target_261']])
+        if search_ticker and not current_data.empty:
+            price = current_data.iloc[0]['إغلاق']
+            root = np.sqrt(price)
+            st.write(f"### 📐 زوايا جان للسعر {price}")
+            st.info(f"زاوية 180 (انعكاس): {(root + 1)**2:.2f}")
+            st.info(f"زاوية 360 (دورة): {(root + 2)**2:.2f}")
+            
+            st.write("### 🌊 مستهدفات إليوت (Z88)")
+            st.success(f"مستهدف الموجه الثالثة (161.8%): {price * 1.618:.2f}")
 
-    # --- القسم 3: زوايا جان ---
-    with tabs[2]:
-        st.subheader("زوايا جان الرقمية (مربع التسعة)")
-        sel_stock = st.selectbox("اختر سهمك:", df['الرمز'].unique())
-        p_close = df[df['الرمز'] == sel_stock]['إغلاق'].values[0]
-        g_levels = get_gann_levels(p_close)
-        for k, v in g_levels.items():
-            st.info(f"{k}: **{v:.2f}**")
-
-    # --- القسم 5: الانعكاس الزمني ---
-    with tabs[4]:
-        st.subheader("الدورة الزمنية والسكويز")
-        df['تاريخ_الانعكاس'] = (datetime.now() + timedelta(days=7)).date()
-        st.write("الأسهم التي تقترب من انفجار سعري (Squeeze):")
-        st.table(df[df['نسبة السيولة الداخلة الى السهم'] > 60][['الرمز', 'إغلاق', 'تاريخ_الانعكاس']].head(10))
-
-    # --- زر سحب البيانات لكل السوق ---
+    # زر سحب إكسيل لكل السوق
     st.sidebar.divider()
-    csv_data = df.to_csv(index=False).encode('utf-8')
-    st.sidebar.download_button("📥 سحب تحليل السوق كاملاً (Excel)", csv_data, "Z88_Full_Analysis.csv")
+    full_csv = df.to_csv(index=False).encode('utf-8')
+    st.sidebar.download_button("📥 سحب تحليل السوق بالكامل", full_csv, "Z88_Full_Report.csv")
 
 else:
-    st.warning("⚠️ يرجى رفع ملفك المرفق (`Prices, support & Resistance.xlsx - Sheet1.csv`) لبدء العمل.")
+    st.info("💡 من فضلك ارفع ملفك (Prices, support & Resistance) من القائمة الجانبية.")
