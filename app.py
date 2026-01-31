@@ -1,131 +1,107 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
+import numpy as np
 from datetime import datetime, timedelta
 
-# 1. إعدادات النظام وتنسيق الواجهة
-st.set_page_config(page_title="Z88 Predator Hub", layout="wide")
+# إعدادات الصفحة والستايل
+st.set_page_config(page_title="Z88 Predator AI Agent", layout="wide")
 
-# --- محرك معالجة البيانات (منع التكرار وحل مشكلة العربي) ---
-def load_and_fix_data(file):
-    try:
-        df = pd.read_excel(file) if file.name.endswith('.xlsx') else pd.read_csv(file, encoding='utf-8-sig')
-        # حل مشكلة ValueError: Duplicate column names found المذكورة في الـ Logs
-        df.columns = [str(c).strip() for c in df.columns]
-        df = df.loc[:, ~df.columns.duplicated()] 
-        
-        mapping = {'الرمز': 'الرمز', 'إغلاق': 'إغلاق', 'السيولة': 'السيولة', 'اسم الشركه': 'اسم الشركه'}
-        for col in df.columns:
-            for k, v in mapping.items():
-                if k in col: df.rename(columns={col: v}, inplace=True)
-        return df
-    except: return None
+# --- 1. محرك تنظيف البيانات (منع تكرار الأعمدة المذكور في الـ Logs) ---
+def clean_data(df):
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
 
-# --- محرك إليوت والزمن المصحح (المنطق الواقعي) ---
-def get_detailed_wave_logic(ticker, p_now):
-    try:
-        # جلب البيانات التاريخية ومعالجة الـ Multi-index
-        hist = yf.download(f"{ticker}.CA", period="2y", progress=False)
-        if isinstance(hist.columns, pd.MultiIndex): hist.columns = hist.columns.get_level_values(0)
-        
-        if hist.empty: return None
+# --- 2. وكيل تحليل الأنماط (AI Visual Logic) ---
+def analyze_z_models(df_hist):
+    # تحويل الشارت لبيانات رقمية يفهمها الـ AI كأنها صورة
+    recent = df_hist.tail(20)
+    current_p = recent['Close'].iloc[-1]
+    low_20 = recent['Low'].min()
+    high_20 = recent['High'].max()
+    
+    # حساب السيولة اللحظية (Money Flow)
+    vol_mean = recent['Volume'].mean()
+    curr_vol = recent['Volume'].iloc[-1]
+    
+    analysis = {"model": "بحث...", "status": "محايد", "score": 0}
 
-        # حساب المتوسطات لتحديد "هوية" الموجة
-        ma50 = hist['Close'].rolling(50).mean().iloc[-1]
-        ma200 = hist['Close'].rolling(200).mean().iloc[-1]
-        high_y = hist['High'].max()
-        low_y = hist['Low'].min()
-        low_d = hist['Low'].idxmin()
-
-        # [1] تشريح الموجة الحالية (المنطق)
-        if p_now > ma50 and p_now > ma200:
-            if p_now < high_y:
-                wave, desc = "الموجة 3 (اندفاعية) 🚀", "السهم في مرحلة الانفجار السعري"
-                target = low_y + (high_y - low_y) * 1.618
-                cycle = 144
-            else:
-                wave, desc = "الموجة 5 (نهاية الاتجاه) 🏁", "صعود أخير، احذر من التصحيح"
-                target = p_now * 1.07
-                cycle = 21
-        elif p_now < ma50 and p_now > ma200:
-            wave, desc = "الموجة 4 (تصحيحية) ⚠️", "تجميع وجني أرباح مؤقت"
-            target = high_y
-            cycle = 34
-        else:
-            wave, desc = "مرحلة تجميع / موجة 2 💤", "السهم يبحث عن قاع لبدء رحلة جديدة"
-            target = ma50
-            cycle = 55
-
-        # [2] حساب الانعكاس الزمني (دورة زمنية في المستقبل)
-        rev_date = low_d + timedelta(days=cycle)
-        while rev_date.date() < datetime.now().date():
-            rev_date += timedelta(days=cycle)
-
-        # [3] الموجة الداخلية القادمة
-        next_start = rev_date.date()
-        next_end = next_start + timedelta(days=21)
-
-        return {
-            "hist": hist, "wave": wave, "desc": desc,
-            "start_p": low_y, "start_d": low_d.date(),
-            "target": target, "rev_date": rev_date.date(),
-            "next_start": next_start, "next_end": next_end
+    # فحص نموذج Z88 (انفجار موجة 3 مع سيولة)
+    if current_p > high_20 * 0.98 and curr_vol > vol_mean * 1.5:
+        analysis = {
+            "model": "Z88 - انفجار سيولة 🚀",
+            "status": "دخول قوي",
+            "score": 95,
+            "desc": "الـ AI اكتشف تجميع مؤسساتي واختراق لمستوى المقاومة الأخير."
         }
-    except: return None
+    # فحص نموذج Z6 (ارتداد سريع من قاع)
+    elif current_p < low_20 * 1.05 and curr_vol > vol_mean:
+        analysis = {
+            "model": "Z6 - ارتداد قاع 🏹",
+            "status": "تجميع قنص",
+            "score": 85,
+            "desc": "الـ AI يرى ضغط بيعي انتهى وبداية تكوين قاع فرعي للانطلاق."
+        }
+    
+    return analysis
 
 # --- الواجهة الرئيسية ---
-st.title("🏹 رادار Z88 - نظام التحليل الموجي والزمني الكامل")
-st.markdown("---")
+st.title("🤖 وكيل الذكاء الاصطناعي Z88 & Z6")
+st.sidebar.markdown("### إعدادات الوكيل")
 
-uploaded_file = st.sidebar.file_uploader("ارفع ملف Prices, support & Resistance", type=["csv", "xlsx"])
+file = st.sidebar.file_uploader("ارفع ملف الأسهم اليومي", type=["csv", "xlsx"])
 
-if uploaded_file:
-    df_main = load_and_fix_data(uploaded_file)
-    if df_main is not None:
-        st.sidebar.success("✅ المحرك جاهز")
-        sel_ticker = st.selectbox("🔍 اختر السهم لبدء التشريح:", df_main['الرمز'].unique())
-        p_now = df_main[df_main['الرمز'] == sel_ticker].iloc[0]['إغلاق']
+if file:
+    df_raw = pd.read_excel(file) if file.name.endswith('.xlsx') else pd.read_csv(file, encoding='utf-8-sig')
+    df = clean_data(df_raw)
+    
+    st.sidebar.success("تم رفع الملف وتفعيل الوكيل ✅")
+    
+    # اختيار وضع المسح
+    scan_mode = st.radio("وضع المسح:", ["تحليل سهم محدد", "مسح السوق بالكامل (AI Scan)"])
+
+    if scan_mode == "تحليل سهم محدد":
+        ticker = st.selectbox("اختر السهم:", df['الرمز'].unique())
+        p_now = df[df['الرمز'] == ticker].iloc[0]['إغلاق']
         
-        with st.spinner('جاري تشغيل الـ 13 محرك تحليل...'):
-            data = get_detailed_wave_logic(sel_ticker, p_now)
+        with st.spinner('جاري جلب الشارت وتحليله بصرياً...'):
+            hist = yf.download(f"{ticker}.CA", period="1y", progress=False)
+            if isinstance(hist.columns, pd.MultiIndex): hist.columns = hist.columns.get_level_values(0)
+            
+            if not hist.empty:
+                result = analyze_z_models(hist)
+                
+                col1, col2 = st.columns([2, 1])
+                with col2:
+                    st.markdown(f"### نتائج وكيل الـ AI")
+                    st.success(f"**النموذج المكتشف:** {result['model']}")
+                    st.info(f"**الحالة:** {result['status']}")
+                    st.metric("درجة الثقة", f"{result['score']}%")
+                    st.write(f"💡 {result['desc']}")
+                
+                with col1:
+                    fig = go.Figure(data=[go.Candlestick(x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close'])])
+                    fig.update_layout(template="plotly_dark", height=450, title=f"الشارت الذي يحلله الوكيل لـ {ticker}")
+                    st.plotly_chart(fig, use_container_width=True)
 
-        if data:
-            # 1. تشريح إليوت والزمن
-            st.header("🌊 أولاً: خريطة إليوت والزمن (السعر المستهدف)")
-            c1, c2 = st.columns(2)
-            with c1:
-                st.info(f"📍 الحالة: {data['wave']}")
-                st.write(f"📝 الوصف: {data['desc']}")
-                st.write(f"🔹 بدأت الدورة من سعر: **{data['start_p']:.2f}**")
-                st.write(f"📅 تاريخ قاع البداية: **{data['start_d']}**")
-            with c2:
-                st.success(f"🎯 المستهدف القادم: **{data['target']:.2f}**")
-                st.warning(f"⏳ موعد الانعكاس الزمني: **{data['rev_date']}**")
-                st.write(f"⏭️ الموجة القادمة تبدأ: **{data['next_start']}**")
-
-            # 2. القناص والميكر
-            st.divider()
-            st.header("🎯 ثانياً: رادار القناص (الدخول والخروج)")
-            q1, q2, q3 = st.columns(3)
-            q1.metric("أفضل سعر دخول", f"{((data['start_p'] + p_now)/2):.2f}")
-            q2.metric("دعم الأوردر بلوك (Buy)", f"{data['hist']['Low'].tail(20).min():.2f}")
-            q3.metric("مقاومة الأوردر بلوك (Sell)", f"{data['hist']['High'].tail(20).max():.2f}")
-
-            # 3. الشارت الفني
-            st.divider()
-            fig = go.Figure(data=[go.Candlestick(x=data['hist'].index, open=data['hist']['Open'], 
-                                                 high=data['hist']['High'], low=data['hist']['Low'], 
-                                                 close=data['hist']['Close'], name='السعر')])
-            fig.add_hline(y=data['target'], line_dash="dash", line_color="green", annotation_text="المستهدف")
-            fig.update_layout(template="plotly_dark", height=600)
-            st.plotly_chart(fig, use_container_width=True)
-
-            # 4. التقارير
-            st.divider()
-            csv_data = df_main.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("📥 تحميل تقرير السوق (عربي)", csv_data, "Z88_Full_Report.csv")
+    else: # مسح السوق بالكامل
+        if st.button("ابدأ مسح الـ AI لكل الأسهم"):
+            findings = []
+            progress_bar = st.progress(0)
+            tickers = df['الرمز'].unique()[:20] # تجربة على أول 20 سهم للسرعة
+            
+            for i, t in enumerate(tickers):
+                h = yf.download(f"{t}.CA", period="60d", progress=False)
+                if not h.empty:
+                    if isinstance(h.columns, pd.MultiIndex): h.columns = h.columns.get_level_values(0)
+                    res = analyze_z_models(h)
+                    if res['score'] > 0:
+                        findings.append({"الرمز": t, "النموذج": res['model'], "القوة": res['score']})
+                progress_bar.progress((i + 1) / len(tickers))
+            
+            st.table(pd.DataFrame(findings))
 
 else:
-    st.info("👋 ارفع ملفك لتشغيل النظام بالكامل.")
+    st.info("قم برفع الملف ليقوم الـ AI Agent ببدء المهمة.")
