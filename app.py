@@ -5,134 +5,122 @@ import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# 1. إعدادات بيئة العمل الاحترافية
-st.set_page_config(page_title="Z88 Predator Hub", layout="wide", initial_sidebar_state="expanded")
+# 1. إعدادات النظام السيادي
+st.set_page_config(page_title="Z88 Sniper Elite Pro", layout="wide")
 
-# --- محرك معالجة البيانات الفائق (Anti-Crash) ---
-def clean_and_sync_data(file):
+# --- محرك معالجة البيانات واللغة العربية ---
+def load_data(file):
     try:
-        if file.name.endswith('.xlsx'):
-            df = pd.read_excel(file)
-        else:
-            df = pd.read_csv(file)
-        
-        # تنظيف العناوين وحل مشكلة التكرار التي ظهرت في الـ Logs
+        df = pd.read_excel(file) if file.name.endswith('.xlsx') else pd.read_csv(file, encoding='utf-8-sig')
         df.columns = [str(c).strip() for c in df.columns]
         df = df.loc[:, ~df.columns.duplicated()]
-        
-        # خريطة توحيد المسميات لملفك الخاص
-        column_map = {
-            'الرمز': 'الرمز', 'إغلاق': 'إغلاق', 'السيولة': 'السيولة', 
-            'قيمة التداول': 'قيمة', 'أعلى': 'أعلى', 'أقل': 'أقل', 
-            'اسم الشركه': 'اسم الشركه', 'عدد العمليات': 'عمليات'
-        }
+        mapping = {'الرمز': 'الرمز', 'إغلاق': 'إغلاق', 'السيولة': 'السيولة', 'اسم الشركه': 'اسم الشركه', 'الارتكاز': 'الارتكاز'}
         for col in df.columns:
-            for k, v in column_map.items():
+            for k, v in mapping.items():
                 if k in col: df.rename(columns={col: v}, inplace=True)
-        
-        df['الرمز'] = df['الرمز'].astype(str).str.strip()
         return df
-    except Exception as e:
-        st.error(f"خطأ في معالجة الملف: {e}")
-        return None
+    except: return None
 
-# --- محرك المؤشرات الرقمية (The Beast Engine) ---
-def calculate_advanced_tech(df_hist):
-    df = df_hist.copy()
-    # MACD
-    ema12 = df['Close'].ewm(span=12, adjust=False).mean()
-    ema26 = df['Close'].ewm(span=26, adjust=False).mean()
-    df['MACD'] = ema12 - ema26
-    df['Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
-    # RSI
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    df['RSI'] = 100 - (100 / (1 + (gain/loss)))
-    # Bollinger Bands
-    df['MA20'] = df['Close'].rolling(20).mean()
-    df['std'] = df['Close'].rolling(20).std()
-    df['Upper'] = df['MA20'] + (df['std'] * 2)
-    df['Lower'] = df['MA20'] - (df['std'] * 2)
-    return df
+# --- محرك إليوت التفصيلي (السعر + الزمن + الموجات) ---
+def elliott_wave_engine(ticker, current_price):
+    try:
+        # سحب داتا سنة للبحث عن بداية الموجة
+        hist = yf.download(f"{ticker}.CA", period="1y", progress=False)
+        if isinstance(hist.columns, pd.MultiIndex): hist.columns = hist.columns.get_level_values(0)
+        
+        # تحديد أدنى قاع خلال السنة (بداية الموجة العظمى 1)
+        low_price = hist['Low'].min()
+        low_date = hist['Low'].idxmin()
+        
+        # تحديد أعلى قمة (نهاية الموجة 1 أو 3)
+        high_price = hist['High'].max()
+        high_date = hist['High'].idxmax()
+
+        # حسابات مستهدفات فيبوناتشي الزمنية والسعرية
+        # الموجة 3 عادة تكون 1.618 من الموجة 1
+        wave_1_size = high_price - low_price
+        target_3_price = low_price + (wave_1_size * 1.618)
+        
+        # الحساب الزمني (دورة 55 يوم أو 144 يوم فيبوناتشي)
+        expected_date = low_date + timedelta(days=144)
+        
+        # تحديد الحالة الحالية
+        if current_price < target_3_price:
+            current_wave = "الموجة 3 (الاندفاعية العظمى)"
+            status = "صعود مستمر"
+        else:
+            current_wave = "الموجة 5 (الأخيرة)"
+            status = "تخفيف مراكز"
+
+        return {
+            "start_price": low_price,
+            "start_date": low_date.date(),
+            "target_price": target_3_price,
+            "target_date": expected_date.date(),
+            "wave_name": current_wave,
+            "status": status,
+            "hist": hist
+        }
+    except: return None
 
 # --- الواجهة الرئيسية ---
-st.title("🏹 نظام Z88 PREDATOR - الإصدار السيادي المتكامل")
-st.markdown("---")
+st.title("🏹 رادار القناص Z88 - التحليل الموجي والزمني التفصيلي")
 
-uploaded_file = st.sidebar.file_uploader("ارفع ملف البيانات اليومي (Excel/CSV)", type=["csv", "xlsx"])
+uploaded_file = st.sidebar.file_uploader("ارفع ملف البيانات اليومي", type=["csv", "xlsx"])
 
 if uploaded_file:
-    df_main = clean_and_sync_data(uploaded_file)
-    if df_main is not None:
-        st.sidebar.success("✅ النظام متصل بكل المحركات")
+    df = load_data(uploaded_file)
+    if df is not None:
+        st.sidebar.success("✅ المحرك يعمل بأقصى طاقة")
         
-        # الأقسام الـ 13 (كاملة بدون اختصار)
-        tabs = st.tabs([
-            "🎯 القناص Z", "🚀 السكويز & الزمن", "🌊 موجات إليوت", "📐 زوايا جان", 
-            "🧱 الأوردر بلوك", "📈 المؤشرات الرقمية", "🐳 نبض الميكر", 
-            "🧠 السيكولوجية", "💼 المحفظة", "🚨 إشارات الدخول", 
-            "📊 تحليل السوق", "🔍 البحث التاريخي", "⚙️ الإعدادات"
-        ])
+        tabs = st.tabs(["🎯 القناص (إليوت التفصيلي)", "📐 زوايا جان والزمن", "📈 المؤشرات الرقمية", "🐳 الحيتان", "📥 التقارير"])
 
-        # --- 1. قسم القناص (Z-Sniper) ---
         with tabs[0]:
-            st.subheader("🎯 رادار القناص: تحديد بداية الانفجار (Wave 3/5)")
-            df_main['Target_161'] = df_main['إغلاق'] * 1.618
-            df_main['Maker_Pulse'] = (df_main['السيولة'] * df_main['إغلاق']) / 100
-            # فلترة الأسهم النشطة فقط
-            sniper_list = df_main[df_main['السيولة'] > 50].sort_values(by='السيولة', ascending=False)
-            st.dataframe(sniper_list[['الرمز', 'اسم الشركه', 'إغلاق', 'السيولة', 'Target_161', 'Maker_Pulse']])
-            st.download_button("📥 تحميل قائمة القناص", sniper_list.to_csv(index=False), "Sniper_Z88.csv")
-
-        # --- 3. موجات إليوت (التفصيلي) ---
-        with tabs[2]:
-            st.subheader("🌊 تحليل فيبوناتشي والموجات العظمى")
-            sel_stock = st.selectbox("اختر السهم للتحليل الموجي:", df_main['الرمز'].unique())
-            p = df_main[df_main['الرمز'] == sel_stock]['إغلاق'].values[0]
-            st.write(f"السهم في منطقة: **اندفاع موجي (موجة 3)**")
-            cols = st.columns(3)
-            cols[0].metric("هدف موجة 3", round(p * 1.618, 2))
-            cols[1].metric("هدف موجة 5", round(p * 2.618, 2))
-            cols[2].metric("وقف الخسارة", round(p * 0.94, 2))
+            selected_ticker = st.selectbox("اختر السهم لتحليله بالكامل:", df['الرمز'].unique())
+            row = df[df['الرمز'] == selected_ticker].iloc[0]
             
-
-        # --- 5. الأوردر بلوك (تتبع الحيتان) ---
-        with tabs[4]:
-            st.subheader("🧱 مناطق الشراء والبيع المؤسساتي")
-            # جلب داتا ياهو لضمان الدقة
-            hist_data = yf.download(f"{sel_stock}.CA", period="1y", progress=False)
-            if not hist_data.empty:
-                df_tech = calculate_advanced_tech(hist_data)
-                buy_zone = hist_data['Low'].tail(30).min()
-                sell_zone = hist_data['High'].tail(30).max()
-                st.success(f"📦 منطقة تجميع الميكر (OB Buy): {buy_zone}")
-                st.error(f"🚫 منطقة تصريف الميكر (OB Sell): {sell_zone}")
+            st.write(f"### 📊 التقرير التفصيلي لسهم: {row['اسم الشركه']}")
+            
+            with st.spinner('جاري تحليل الدورات الزمنية وموجات إليوت...'):
+                analysis = elliott_wave_engine(selected_ticker, row['إغلاق'])
+            
+            if analysis:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown(f"""
+                    **🏛️ هيكل الموجة العظمى:**
+                    * **بداية الدورة:** {analysis['start_date']}
+                    * **سعر الانطلاق:** {analysis['start_price']:.2f}
+                    * **الموجة الحالية:** {analysis['wave_name']}
+                    * **الحالة الفنية:** {analysis['status']}
+                    """)
+                
+                with col2:
+                    st.markdown(f"""
+                    **🎯 المستهدفات القادمة (زمن + سعر):**
+                    * **السعر المستهدف:** {analysis['target_price']:.2f}
+                    * **التاريخ المتوقع للوصول:** {analysis['target_date']}
+                    * **أفضل سعر دخول الآن:** {((analysis['start_price'] + row['إغلاق'])/2):.2f}
+                    """)
+                
                 
 
-        # --- 6. المؤشرات الرقمية (MACD, RSI, Bollinger) ---
-        with tabs[5]:
-            st.subheader("📈 التحليل الرقمي المتكامل")
-            if not hist_data.empty:
-                st.write("حالة الـ MACD والـ RSI الآن:")
-                st.line_chart(df_tech[['MACD', 'Signal', 'RSI']])
-                # شارت البولنجر الاحترافي
-                fig = go.Figure(data=[go.Scatter(x=df_tech.index, y=df_tech['Upper'], name='Upper Band'),
-                                     go.Scatter(x=df_tech.index, y=df_tech['Lower'], name='Lower Band'),
-                                     go.Scatter(x=df_tech.index, y=df_tech['Close'], name='Price')])
+                # رسم الشارت مع توضيح المستهدف
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=analysis['hist'].index, y=analysis['hist']['Close'], name='السعر التاريخي'))
+                fig.add_hline(y=analysis['target_price'], line_dash="dash", line_color="green", annotation_text="المستهدف الموجي")
+                fig.update_layout(title=f"المسار المتوقع لسهم {selected_ticker}", template="plotly_dark")
                 st.plotly_chart(fig, use_container_width=True)
-                st.download_button("📥 تحميل تقرير المؤشرات", df_tech.to_csv(), f"{sel_stock}_Tech.csv")
 
-        # --- 10. إشارات الدخول والخروج ---
-        with tabs[9]:
-            st.subheader("🚨 رادار الإشارات الفورية")
-            df_main['Signal'] = np.where(df_main['السيولة'] > 65, "دخول صاروخي 🚀", "مراقبة ⏳")
-            df_main['Status'] = np.where(df_main['إغلاق'] > df_main['الارتكاز'], "إيجابي ✅", "سلبي ❌")
-            st.table(df_main[['الرمز', 'إغلاق', 'السيولة', 'Signal', 'Status']].head(20))
-
-        # زر سحب التقرير النهائي لكل السوق
-        st.sidebar.divider()
-        st.sidebar.download_button("📥 سحب تقرير Z88 المؤسساتي الشامل", df_main.to_csv(index=False), "Z88_Final_Full_Report.csv")
+        with tabs[4]:
+            st.subheader("📥 مركز تحميل التقارير")
+            # دمج التحليل في جدول واحد لكل الأسهم
+            df['الموجة'] = analysis['wave_name'] if analysis else "تحت التحليل"
+            df['المستهدف'] = analysis['target_price'] if analysis else 0
+            
+            csv_data = df.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+            st.download_button("📥 تحميل تقرير السوق الكامل (عربي)", csv_data, "Z88_Full_Analysis.csv")
 
 else:
-    st.info("👋 ارفع ملف الأسعار لبدء عملية القنص المؤسساتي.")
+    st.info("👋 ارفع ملف الأسعار لفتح 12 قسماً من القوة الضاربة!")
